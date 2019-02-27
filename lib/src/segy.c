@@ -387,11 +387,18 @@ static int formatsize( int format ) {
     switch( format ) {
         case SEGY_IBM_FLOAT_4_BYTE:             return 4;
         case SEGY_SIGNED_INTEGER_4_BYTE:        return 4;
+        case SEGY_SIGNED_INTEGER_8_BYTE:        return 8;
         case SEGY_SIGNED_SHORT_2_BYTE:          return 2;
         case SEGY_FIXED_POINT_WITH_GAIN_4_BYTE: return 4;
         case SEGY_IEEE_FLOAT_4_BYTE:            return 4;
+		case SEGY_IEEE_FLOAT_8_BYTE:			return 8;
         case SEGY_SIGNED_CHAR_1_BYTE:           return 1;
-
+		case SEGY_UNSIGNED_CHAR_1_BYTE:			return 1;
+		case SEGY_UNSIGNED_INTEGER_4_BYTE:		return 4;
+		case SEGY_UNSIGNED_SHORT_2_BYTE:		return 2;
+		case SEGY_UNSIGNED_INTEGER_8_BYTE:		return 8;
+		case SEGY_SIGNED_CHAR_3_BYTE:
+		case SEGY_UNSIGNED_INTEGER_3_BYTE:
         case SEGY_NOT_IN_USE_1:
         case SEGY_NOT_IN_USE_2:
         default:
@@ -1226,13 +1233,13 @@ int segy_sample_interval( segy_file* fp, float fallback, float* dt ) {
      */
 
     *dt = fallback;
-    if( binary_header_dt <= 0 && trace_header_dt > 0 )
+    if( binary_header_dt == 0 && trace_header_dt != 0 )
         *dt = trace_header_dt;
 
-    if( trace_header_dt <= 0 && binary_header_dt > 0 )
+    if( trace_header_dt == 0 && binary_header_dt != 0 )
         *dt = binary_header_dt;
 
-    if( trace_header_dt == binary_header_dt && trace_header_dt > 0 )
+    if( trace_header_dt == binary_header_dt && trace_header_dt != 0 )
         *dt = trace_header_dt;
 
     return SEGY_OK;
