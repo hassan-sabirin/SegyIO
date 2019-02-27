@@ -21,7 +21,7 @@ def main():
         src.trace[0] = trace
 
         # read trace 1, but re-use the memory for speed
-        trace = src.trace[1, trace]
+        trace = src.trace[1]
         # square all values. the trace is a plain numpy array
         trace = np.square(trace, trace)
         # write the trace back to disk, but at trace 2
@@ -41,7 +41,7 @@ def main():
             # accumulate the traces' 30th value
             tracesum += tr[30]
 
-        print("Trace sum: %f" % tracesum)
+        print("Trace sum: {}".format(tracesum))
 
         # write the iline at 2 to the iline at 3
         sum3 = np.sum(src.iline[3])
@@ -50,7 +50,7 @@ def main():
         src.flush()
         sum2 = np.sum(src.iline[2])
 
-        print("Accumulates of inlines 2 and 3: %f -- %f" % (sum2, sum3))
+        print("Accumulates of inlines 2 and 3: {} -- {}".format(sum2, sum3))
 
         # ilines too are plain numpy ndarrays, with trace-major addressing
         # i.e. iline[2,40] would be yield trace#2's 40th value
@@ -64,19 +64,19 @@ def main():
         for line in src.iline:
             linesum += line[2,22]
 
-        print("Inline sum: %f" % linesum)
+        print("Inline sum: {}".format(linesum))
 
         # xline access is identical to iline access
         linesum = 0
         for line in src.xline:
             linesum += line[2,22]
 
-        print("Crossline sum: %f" % linesum)
+        print("Crossline sum: {}".format(linesum))
 
         # accessing a non-existing inline will raise a KeyError
         try:
-            src.iline[5000]
-            assert(False)
+            _ = src.iline[5000]
+            sys.exit("Was able to access non-existing inline")
         except KeyError as e:
             print(str(e))
 

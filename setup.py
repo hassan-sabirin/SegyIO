@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 
-from distutils.core import setup, Extension
-
-_segyio = Extension('segyio._segyio',
-                    sources=['python/segyio/_segyio.c', 'lib/src/segy.c'],
-                    include_dirs=['lib/src', 'lib/include'],
-                    define_macros=[('HAVE_MMAP', 1), ('HAVE_NETINET_IN_H', 1)],
-                    extra_compile_args=['-std=c99'])
+import os
+import sys
+from setuptools import setup, Extension
 
 long_description = """
 =======
 SEGY IO
 =======
+
+https://segyio.readthedocs.io
 
 Introduction
 ------------
@@ -51,21 +49,67 @@ written according to specification, but segyio does not mandate this.
 
 """
 
-setup(name='SegyIO',
-      version='1.0.4',
-      description='IO library for SEG-Y files',
+def src(x):
+    root = os.path.dirname( __file__ )
+    return os.path.abspath(os.path.join(root, x))
+
+if 'win' in sys.platform:
+    extra_libs = []
+else:
+    extra_libs = ['m']
+
+def getversion():
+    # if this is a tarball distribution, the .git-directory won't be avilable
+    # and setuptools_scm will crash hard. good tarballs are built with a
+    # pre-generated version.py, so parse that and extract version from it
+    #
+    # set the SEGYIO_NO_GIT_VER environment variable to ignore a version from
+    # git (useful when building for debian or other distributions)
+    if not 'SEGYIO_NO_GIT_VER' in os.environ and os.path.isdir(src('.git')):
+        return {
+            'use_scm_version': {
+                'root': src(''),
+                'write_to': src('python/segyio/version.py')
+            }
+        }
+
+
+    pkgversion = { 'version': '0.0.0' }
+    versionfile = src('python/segyio/version.py')
+
+    if not os.path.exists(versionfile):
+        return pkgversion
+
+    import ast
+    with open(versionfile) as f:
+        root = ast.parse(f.read())
+
+    for node in ast.walk(root):
+        if not isinstance(node, ast.Assign): continue
+        if len(node.targets) == 1 and node.targets[0].id == 'version':
+            pkgversion['version'] = node.value.s
+
+    return pkgversion
+
+setup(name='segyio',
+      description='Simple & fast IO for SEG-Y files',
       long_description=long_description,
       author='Statoil ASA',
-      author_email='ert@statoil.com',
-      url='https://github.com/Statoil/SegyIO',
-      packages=['segyio'],
-      package_dir={'': 'python'},
-      package_data={'': ['License.md']},
+      author_email='fg_gpl@statoil.com',
+      url='https://github.com/Statoil/segyio',
+      package_dir={'' : src('python')},
+      packages=['segyio', 'segyio.su'],
+      package_data={ 'segyio': ['segyio.dll'], },
       license='LGPL-3.0',
-      ext_modules=[_segyio],
+      ext_modules=[Extension('segyio._segyio',
+        sources=[src('python/segyio/segyio.cpp')],
+        include_dirs=[src('lib/include')],
+        libraries=['segyio'] + extra_libs
+        )],
       platforms='any',
-      requires=['numpy'],
-      install_requires=['numpy'],
+      install_requires=['numpy >=1.10'],
+      setup_requires=['setuptools >=28', 'setuptools_scm', 'pytest-runner'],
+      tests_require=['pytest'],
       classifiers=[
           'Development Status :: 5 - Production/Stable',
           'Environment :: Other Environment',
@@ -73,12 +117,14 @@ setup(name='SegyIO',
           'Intended Audience :: Science/Research',
           'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',
           'Natural Language :: English',
-          'Operating System :: OS Independent',
-          'Programming Language :: C',
+          'Programming Language :: Python',
           'Programming Language :: Python :: 2.7',
+          'Programming Language :: Python :: 3.5',
+          'Programming Language :: Python :: 3.6',
           'Topic :: Scientific/Engineering',
           'Topic :: Scientific/Engineering :: Physics',
           'Topic :: Software Development :: Libraries',
           'Topic :: Utilities'
-      ]
+      ],
+      **getversion()
       )

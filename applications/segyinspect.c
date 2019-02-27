@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,7 +97,11 @@ int main(int argc, char* argv[]) {
     }
 
     int sorting;
-    err = segy_sorting( fp, il_field, xl_field, &sorting, trace0, trace_bsize );
+    err = segy_sorting( fp, il_field,
+                            xl_field,
+                            SEGY_TR_OFFSET,
+                            &sorting,
+                            trace0, trace_bsize );
     if( err != 0 ) {
         perror( "Could not determine sorting" );
         exit( err );

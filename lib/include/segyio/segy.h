@@ -1,17 +1,16 @@
 #ifndef SEGYIO_SEGY_H
 #define SEGYIO_SEGY_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
-
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #define SEGY_BINARY_HEADER_SIZE 400
 #define SEGY_TEXT_HEADER_SIZE 3200
 #define SEGY_TRACE_HEADER_SIZE 240
+
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 
 /*
  * About signatures:
@@ -45,7 +44,7 @@ int segy_close( segy_file* );
  * The binheader buffer passed to these functions must be of *at least*
  * `segy_binheader_size`. Returns size, not an error code.
  */
-int segy_binheader_size();
+int segy_binheader_size( void );
 int segy_binheader( segy_file*, char* buf );
 int segy_write_binheader( segy_file*, const char* buf );
 /*
@@ -53,9 +52,39 @@ int segy_write_binheader( segy_file*, const char* buf );
  * allocates 2 octets for this, so it comfortably sits inside an int
  */
 int segy_samples( const char* binheader );
+/*
+ * infer the interval between traces. this function tries to read the interval
+ * from the binary header and the first trace header, and will fall back to the
+ * `fallback` argument.
+ */
 int segy_sample_interval( segy_file*, float fallback , float* dt );
-/* exception: the int returned is an enum, SEGY_SORTING, not an error code */
+
+/* exception: the int returned is an enum, SEGY_FORMAT, not an error code */
 int segy_format( const char* binheader );
+/* override the assumed format of the samples.
+ * set file as LSB/MSB (little/big endian)
+ *
+ * by default, segyio assumes a 4-byte float format (usually IBM float). The
+ * to/from native functions take this parameter explicitly, but functions like
+ * read_subtrace requires the size of each element.
+ *
+ * `format` is the SEGY_FORMAT and SEGY_FILEOPT enum. if this function is not
+ * called, for backwards compatibility reasons, the format is always assumed to
+ * be IBM float.
+ *
+ * The binary header is not implicitly queried, because it's often broken and
+ * unreliable with this information - however, if the header IS considered to
+ * be reliable, the result of `segy_format` can be passed to this function.
+ *
+ * By default, segyio assumes files are MSB. However, some files (seismic unix,
+ * SEG-Y rev2) are LSB. *all* functions returning bytes in segyio will output
+ * MSB, regardless of the properties of the underlying file.
+ *
+ * independent format flags can be OR'd together:
+ * segy_set_format( SEGY_IEEE_FLOAT_4_BYTE | SEGY_LSB );
+ */
+int segy_set_format( segy_file*, int format );
+
 int segy_get_field( const char* traceheader, int field, int32_t* f );
 int segy_get_bfield( const char* binheader, int field, int32_t* f );
 int segy_set_field( char* traceheader, int field, int32_t val );
@@ -72,12 +101,21 @@ int segy_field_forall( segy_file*,
 
 /*
  * exception: segy_trace_bsize computes the size of the traces in bytes. Cannot
- * fail.
+ * fail. Equivalent to segy_trsize(SEGY_IBM_FLOAT_4_BYTE, samples);
  */
 int segy_trace_bsize( int samples );
+/*
+ * segy_trsize computes the size of a trace in bytes, determined by the trace
+ * format. If format is unknown, invalid, or unsupported, this function returns
+ * a negative value. If `samples` is zero or negative, the result is undefined.
+ */
+int segy_trsize( int format, int samples );
 /* byte-offset of the first trace header. */
 long segy_trace0( const char* binheader );
-/* number of traces in this file */
+/*
+ * number of traces in this file.
+ * if this function fails, the input argument is not modified.
+ */
 int segy_traces( segy_file*, int*, long trace0, int trace_bsize );
 
 int segy_sample_indices( segy_file*,
@@ -87,8 +125,34 @@ int segy_sample_indices( segy_file*,
                          float* buf );
 
 /* text header operations */
+/*
+ * buf in all read and write functions should be minimum segy_textheader_size()
+ * in size
+ *
+ * all read_textheader function outputs are zero-terminated C strings. It is
+ * assumed input is ebcdic encoded.
+ */
 int segy_read_textheader( segy_file*, char *buf);
-int segy_textheader_size();
+int segy_textheader_size( void );
+/*
+ * read the extended textual headers. `pos = 0` gives the first *extended*
+ * header, i.e. the first textual header following the binary header.
+ * Behaviour is undefined if the file does not have extended headers
+ */
+int segy_read_ext_textheader( segy_file*, int pos, char* buf );
+
+/*
+ * Write the text header. `pos` is regular array indexing, i.e. pos = 0 is the
+ * regular text header, 1 is the first extended textual header. This is *NOT*
+ * the same behaviour as read_ext_textheader.
+ *
+ * The asymmetry in the interface is unfortunate, but a consequence of there
+ * only being support for non-extended headers for a while. The old behaviour
+ * is preserved for backwards compatibility.
+ *
+ * Like the read-textheader functions, the input text should be in ascii and
+ * will be automatically encoded to ebcdic.
+ */
 int segy_write_textheader( segy_file*, int pos, const char* buf );
 
 /* Read the trace header at `traceno` into `buf`. */
@@ -106,13 +170,13 @@ int segy_write_traceheader( segy_file*,
                             int trace_bsize );
 
 /*
- * Number of traces in this file. The sorting type will be written to `sorting`
- * if the function can figure out how the file is sorted. If not, some error
- * code will be returned and `out` will not be modified.
+ * The sorting type will be written to `sorting` if the function can figure out
+ * how the file is sorted.
  */
 int segy_sorting( segy_file*,
                   int il,
                   int xl,
+                  int tr_offset,
                   int* sorting,
                   long trace0,
                   int trace_bsize );
@@ -141,19 +205,19 @@ int segy_offset_indices( segy_file*,
                          int trace_bsize );
 
 /*
- * read/write traces. Does not manipulate the buffers at all, i.e. in order to
- * make sense of the read trace it must be converted to native floats, and the
- * buffer sent to write must be converted to target float.
+ * read/write traces. does not convert data from on-disk representation to
+ * native formats, so this data can not be used directly on most systems (intel
+ * in particular). use to/from native to convert to native representations.
  */
 int segy_readtrace( segy_file*,
                     int traceno,
-                    float* buf,
+                    void* buf,
                     long trace0,
                     int trace_bsize );
 
 int segy_writetrace( segy_file*,
                      int traceno,
-                     const float* buf,
+                     const void* buf,
                      long trace0,
                      int trace_bsize );
 
@@ -185,8 +249,8 @@ int segy_readsubtr( segy_file*,
                     int start,
                     int stop,
                     int step,
-                    float* buf,
-                    float* rangebuf,
+                    void* buf,
+                    void* rangebuf,
                     long trace0,
                     int trace_bsize );
 
@@ -195,8 +259,8 @@ int segy_writesubtr( segy_file*,
                      int start,
                      int stop,
                      int step,
-                     const float* buf,
-                     float* rangebuf,
+                     const void* buf,
+                     void* rangebuf,
                      long trace0,
                      int trace_bsize );
 
@@ -204,21 +268,27 @@ int segy_writesubtr( segy_file*,
  * convert to/from native float from segy formats (likely IBM or IEEE).  Size
  * parameter is long long because it needs to know the number of *samples*,
  * which can be very large for bulk conversion of a collection of traces.
+ *
+ * to/from native are unaware of the host architecture, and always assume MSB
+ * layout. However, the read/write functions of segyio are aware, so as long as
+ * only segyio functions are used, you do not need to care about the endianenss
+ * of your platform. Some care must be taken, because you need to explicitly
+ * tell segyio if your file uses LSB.
  */
 int segy_to_native( int format,
                     long long size,
-                    float* buf );
+                    void* buf );
 
 int segy_from_native( int format,
                       long long size,
-                      float* buf );
+                      void* buf );
 
 int segy_read_line( segy_file* fp,
                     int line_trace0,
                     int line_length,
                     int stride,
                     int offsets,
-                    float* buf,
+                    void* buf,
                     long trace0,
                     int trace_bsize );
 
@@ -227,7 +297,7 @@ int segy_write_line( segy_file* fp,
                     int line_length,
                     int stride,
                     int offsets,
-                    const float* buf,
+                    const void* buf,
                     long trace0,
                     int trace_bsize );
 
@@ -242,6 +312,9 @@ int segy_write_line( segy_file* fp,
  *
  * `offsets` is the number of offsets in the file and be found with
  * `segy_offsets`.
+ *
+ * If the file has only 1 trace (or, for pre-stack files, 1-trace-per-offset),
+ * segyio considers this as 1 line in each direction.
  */
 int segy_count_lines( segy_file*,
                       int field,
@@ -322,6 +395,41 @@ int segy_line_trace0( int lineno,
                       const int* linenos,
                       int linenos_sz,
                       int* traceno );
+
+/*
+ * Find the `rotation` of the survey in radians.
+ *
+ * Returns the clock-wise rotation around north, i.e. the angle between the
+ * first line given and north axis. In this context, north is the direction
+ * that yields a higher CDP-Y coordinate, and east is the direction that yields
+ * a higher CDP-X coordinate.
+ *
+ * N
+ * |
+ * |
+ * | +
+ * | |~~/``````/
+ * | | /------/
+ * | |/,,,,,,/
+ * |
+ * +--------------- E
+ *
+ *
+ * When the survey is as depicted, and the first line is starting in the
+ * south-west corner and goes north, the angle (~~) is < pi/4. If the first
+ * line is parallel with equator moving east, the angle is pi/2.
+ *
+ * The return value is in the domain [0, 2pi)
+ */
+int segy_rotation_cw( segy_file*,
+                      int line_length,
+                      int stride,
+                      int offsets,
+                      const int* linenos,
+                      int linenos_sz,
+                      float* rotation,
+                      long trace0,
+                      int trace_bsize );
 
 /*
  * Find the stride needed for an inline/crossline traversal.
@@ -475,6 +583,11 @@ typedef enum {
 } SEGY_FORMAT;
 
 typedef enum {
+    SEGY_LSB = (1 << 8),
+    SEGY_MSB = (1 << 9),
+} SEGY_FILEOPT;
+
+typedef enum {
     SEGY_UNKNOWN_SORTING = 0,
     SEGY_CROSSLINE_SORTING = 1,
     SEGY_INLINE_SORTING = 2,
@@ -494,6 +607,8 @@ typedef enum {
     SEGY_INVALID_ARGS,
     SEGY_MMAP_ERROR,
     SEGY_MMAP_INVALID,
+    SEGY_READONLY,
+    SEGY_NOTFOUND,
 } SEGY_ERROR;
 
 #ifdef __cplusplus
