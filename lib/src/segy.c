@@ -2168,7 +2168,9 @@ int segy_read_ext_textheader( segy_file* fp, int pos, char *buf) {
 
 #ifdef HAVE_MMAP
     if ( fp->addr ) {
-        encode( buf, (char*)fp->addr + offset, e2a, SEGY_TEXT_HEADER_SIZE );
+        for( size_t i = 0; i < SEGY_TEXT_HEADER_SIZE; ++i )
+        buf[ i ] =  fp->addr[ offset+i ] 
+	
         buf[ SEGY_TEXT_HEADER_SIZE ] = '\0';
         return SEGY_OK;
     }
@@ -2181,7 +2183,9 @@ int segy_read_ext_textheader( segy_file* fp, int pos, char *buf) {
     const size_t read = fread( localbuf, 1, SEGY_TEXT_HEADER_SIZE, fp->fp );
     if( read != SEGY_TEXT_HEADER_SIZE ) return SEGY_FREAD_ERROR;
 
-    encode( buf, localbuf, e2a, SEGY_TEXT_HEADER_SIZE );
+    //encode( buf, localbuf, e2a, SEGY_TEXT_HEADER_SIZE );
+	 for( size_t i = 0; i < SEGY_TEXT_HEADER_SIZE; ++i )
+        buf[ i ] =  localbuf[ i ] ;
     return SEGY_OK;
 }
 
