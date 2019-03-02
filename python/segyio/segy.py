@@ -54,6 +54,7 @@ class SegyFile(object):
 
         try:
             self._dtype = np.dtype({
+               -2: np.float32,
                -1: np.float32,
                 1: np.float32,
                 2: np.int32,
