@@ -855,6 +855,31 @@ static int bswap_bin( char* xs, int lsb ) {
     return SEGY_OK;
 }
 
+
+static inline void detect_endianness( segy_file* fp, void* buf ){
+	int16_t format_id = 0; 
+	
+	//printf("buf: %08jx\n", *(uintmax_t *)buf);
+    //segy_get_bfield( buf, SEGY_BIN_FORMAT, &format_id );
+	format_id = segy_format( buf, &format_id );
+	
+	// the data format is stored in two bytes.
+	// current valid range is between 1 to 16 (lookup segy.h SEGY_FORMAT)
+	// if data is msb, lower byte read from file should be between 0x0001 to 0x00F0
+	// if lsb, it could be 0x0100 to 0xF000
+	// masking the lower bit can tell us whether this is lsb or msb. somewhat magic as the data format range could get extended in future revisions.
+	// works for now.
+	
+	format_id = format_id & 0x00FF;
+	
+	// if lower bit of format is 0, most likely this is little endian.
+	fp->lsb = (format_id == 0);
+	
+	
+	//printf("format: %08jx\n", (uintmax_t)format_id);
+	//printf("format: %d\n", format_id);
+	printf("isLSB: %d\n", fp->lsb);
+	}
 int segy_binheader( segy_file* fp, char* buf ) {
     if( !fp ) return SEGY_INVALID_ARGS;
 
@@ -864,7 +889,9 @@ int segy_binheader( segy_file* fp, char* buf ) {
         const int len = SEGY_BINARY_HEADER_SIZE;
         const int err = memread( buf, fp, src, len );
         if( err ) return err;
-
+		
+		detect_endianness(fp, buf);
+		
         /* successful and file was lsb - swap to present as msb */
         return bswap_bin( buf, fp->lsb );
     }
@@ -876,7 +903,8 @@ int segy_binheader( segy_file* fp, char* buf ) {
     const size_t read_count = fread( buf, 1, SEGY_BINARY_HEADER_SIZE, fp->fp );
     if( read_count != SEGY_BINARY_HEADER_SIZE )
         return SEGY_FREAD_ERROR;
-
+	
+		detect_endianness(fp, buf);
     return bswap_bin( buf, fp->lsb );
 }
 
