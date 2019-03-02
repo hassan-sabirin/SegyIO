@@ -300,9 +300,13 @@ PyObject* segyopen( segyiofd* self ) {
     const int samplecount = segy_samples( binary );
     const int format = segy_format( binary );
     int trace_bsize = segy_trsize( format, samplecount );
+	printf(" trace_bsize: %d\n", trace_bsize);
 
+	
     /* fall back to assuming 4-byte ibm float if the format field is rubbish */
     if( trace_bsize < 0 ) trace_bsize = segy_trace_bsize( samplecount );
+	
+			printf(" trace_bsize: %d\n", trace_bsize);
 
     /*
      * if set_format errors, it's because the format-field in the binary header
@@ -314,10 +318,16 @@ PyObject* segyopen( segyiofd* self ) {
     switch( format ) {
         case SEGY_IBM_FLOAT_4_BYTE:             elemsize = 4; break;
         case SEGY_SIGNED_INTEGER_4_BYTE:        elemsize = 4; break;
+        case SEGY_SIGNED_INTEGER_8_BYTE:        elemsize = 8; break;
         case SEGY_SIGNED_SHORT_2_BYTE:          elemsize = 2; break;
         case SEGY_FIXED_POINT_WITH_GAIN_4_BYTE: elemsize = 4; break;
         case SEGY_IEEE_FLOAT_4_BYTE:            elemsize = 4; break;
+		case SEGY_IEEE_FLOAT_8_BYTE:			elemsize = 8; break;
         case SEGY_SIGNED_CHAR_1_BYTE:           elemsize = 1; break;
+		case SEGY_UNSIGNED_CHAR_1_BYTE:			elemsize = 1; break;
+		case SEGY_UNSIGNED_INTEGER_4_BYTE:		elemsize = 4; break;
+		case SEGY_UNSIGNED_SHORT_2_BYTE:		elemsize = 2; break;
+		case SEGY_UNSIGNED_INTEGER_8_BYTE:		elemsize = 8; break;
 
         case SEGY_NOT_IN_USE_1:
         case SEGY_NOT_IN_USE_2:
@@ -337,6 +347,8 @@ PyObject* segyopen( segyiofd* self ) {
                                  "no data traces past headers" );
 
         case SEGY_TRACE_SIZE_MISMATCH:
+			printf(" tracecount: %d\n", tracecount);
+			printf(" samplecount %d\n",samplecount);
             return RuntimeError( "trace count inconsistent with file size, "
                                  "trace lengths possibly of non-uniform" );
 
@@ -399,10 +411,16 @@ PyObject* segycreate( segyiofd* self, PyObject* args, PyObject* kwargs ) {
     switch( format ) {
         case SEGY_IBM_FLOAT_4_BYTE:
         case SEGY_SIGNED_INTEGER_4_BYTE:
+        case SEGY_SIGNED_INTEGER_8_BYTE:
         case SEGY_SIGNED_SHORT_2_BYTE:
         case SEGY_FIXED_POINT_WITH_GAIN_4_BYTE:
         case SEGY_IEEE_FLOAT_4_BYTE:
+		case SEGY_IEEE_FLOAT_8_BYTE:
         case SEGY_SIGNED_CHAR_1_BYTE:
+		case SEGY_UNSIGNED_CHAR_1_BYTE:
+		case SEGY_UNSIGNED_INTEGER_4_BYTE:
+		case SEGY_UNSIGNED_SHORT_2_BYTE:
+		case SEGY_UNSIGNED_INTEGER_8_BYTE:
             break;
 
         default:
@@ -412,18 +430,27 @@ PyObject* segycreate( segyiofd* self, PyObject* args, PyObject* kwargs ) {
 
     int elemsize = 4;
     switch( format ) {
-        case SEGY_IBM_FLOAT_4_BYTE:
+        case SEGY_SIGNED_INTEGER_8_BYTE:
+		case SEGY_IEEE_FLOAT_8_BYTE:
+		case SEGY_UNSIGNED_INTEGER_8_BYTE:
+            elemsize = 8;
+            break;
+		
+         case SEGY_IBM_FLOAT_4_BYTE:
         case SEGY_SIGNED_INTEGER_4_BYTE:
         case SEGY_FIXED_POINT_WITH_GAIN_4_BYTE:
         case SEGY_IEEE_FLOAT_4_BYTE:
+		case SEGY_UNSIGNED_INTEGER_4_BYTE:
             elemsize = 4;
             break;
 
         case SEGY_SIGNED_SHORT_2_BYTE:
+		case SEGY_UNSIGNED_SHORT_2_BYTE:
             elemsize = 2;
             break;
-
+			
         case SEGY_SIGNED_CHAR_1_BYTE:
+		case SEGY_UNSIGNED_CHAR_1_BYTE:
             elemsize = 1;
             break;
 
