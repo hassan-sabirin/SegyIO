@@ -1382,16 +1382,15 @@ SCENARIO( "reading a large file", "[c.segy]" ) {
         }
     }
 }
-
-
-SCENARIO("Read 2-byte int file, write into 8-byte LSB IEEE double file", "[c.segy][2-byte signed int to 8-byte IEEE double]") {
+SCENARIO("Read 2-byte int file, write into 8-byte IEEE double file", "[c.segy][2-byte signed int to 8-byte IEEE double]") {
 	unique_segy src_ufp{ openfile("test-data/f3.sgy", "rb") };
 	auto src_fp = src_ufp.get();
 
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector<std::int16_t> src_trace(75);
+	std::vector<double> dst_trace(75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -1406,10 +1405,13 @@ SCENARIO("Read 2-byte int file, write into 8-byte LSB IEEE double file", "[c.seg
 	Err err = Err::ok();
 
 
-	unique_segy dst_ufp{ openfile("test-data/SEGY_IEEE_FLOAT_8_BYTE.sgy", "w+b") };
-	auto dst_fp = dst_ufp.get();
-	double dst_trace[75];
+	char * outp = "test-data/SEGY_IEEE_FLOAT_8_BYTE.sgy";
+	if (testcfg::config().lsbit)
+		outp = "test-data/SEGY_IEEE_FLOAT_8_BYTE-lsb.sgy";
 
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
+	auto dst_fp = dst_ufp.get();
+	
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_IEEE_DOUBLE_8_BYTE;
@@ -1427,7 +1429,7 @@ SCENARIO("Read 2-byte int file, write into 8-byte LSB IEEE double file", "[c.seg
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -1446,15 +1448,21 @@ SCENARIO("Read 2-byte int file, write into 8-byte LSB IEEE double file", "[c.seg
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
+		REQUIRE(err == Err::ok());
+
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
 		REQUIRE(err == Err::ok());
 
 		for (int i = 0; i < samples; i++) {
 			dst_trace[i] = src_trace[i];
 		}
 
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
 
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
@@ -1471,23 +1479,31 @@ SCENARIO("Read 2-byte int file, write into 8-byte LSB IEEE double file", "[c.seg
 
 	THEN("changes are observable on disk") {
 
-		double fresh_trace[75];
+		std::vector<double> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == (double)src_trace[0]);
-		CHECK(fresh_trace[10] == (double)src_trace[10]);
-		CHECK(fresh_trace[20] == (double)src_trace[20]);
-	}
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
 
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+		for (int i = 0; i < 75; i++){
+			CHECK(fresh_trace[i] == (double)src_trace[i]);
+		}
+	}
+	
 
 	//    segy_to_native( self->format, bufsize, buffer.buf() );
 
@@ -1504,7 +1520,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector<int16_t> src_trace(75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -1519,9 +1535,13 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 	Err err = Err::ok();
 
 
-	unique_segy dst_ufp{ openfile("test-data/SEGY_SIGNED_SHORT_2_BYTE.sgy", "w+b") };
+	char * outp = "test-data/SEGY_SIGNED_SHORT_2_BYTE.sgy";
+	if (testcfg::config().lsbit)
+		outp = "test-data/SEGY_SIGNED_SHORT_2_BYTE-lsb.sgy";
+
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
 	auto dst_fp = dst_ufp.get();
-	short dst_trace[75];
+	std::vector<short> dst_trace(75);
 
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
@@ -1540,7 +1560,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -1559,15 +1579,21 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
+		REQUIRE(err == Err::ok());
+
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
 		REQUIRE(err == Err::ok());
 
 		for (int i = 0; i < samples; i++) {
 			dst_trace[i] = src_trace[i];
 		}
 
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
 
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
@@ -1584,21 +1610,29 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 
 	THEN("changes are observable on disk") {
 
-		short fresh_trace[75];
+		std::vector<short> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == (short)src_trace[0]);
-		CHECK(fresh_trace[10] == (short)src_trace[10]);
-		CHECK(fresh_trace[20] == (short)src_trace[20]);
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+		for (int i = 0; i < 75; i++){
+			CHECK(fresh_trace[i] == (short)src_trace[i]);
+		}
 	}
 
 
@@ -1616,7 +1650,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector<std::int16_t> src_trace(75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -1631,9 +1665,13 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 	Err err = Err::ok();
 
 
-	unique_segy dst_ufp{ openfile("test-data/SEGY_UNSIGNED_SHORT_2_BYTE.sgy", "w+b") };
+	char * outp = "test-data/SEGY_UNSIGNED_SHORT_2_BYTE.sgy";
+	if (testcfg::config().lsbit)
+		outp = "test-data/SEGY_UNSIGNED_SHORT_2_BYTE-lsb.sgy";
+
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
 	auto dst_fp = dst_ufp.get();
-	unsigned short dst_trace[75];
+	std::vector<unsigned short> dst_trace(75);
 
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
@@ -1652,7 +1690,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -1671,15 +1709,23 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
 		REQUIRE(err == Err::ok());
 
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
 		for (int i = 0; i < samples; i++) {
-			dst_trace[i] = src_trace[i] + 32768;
+			dst_trace[i] = (unsigned short)(src_trace[i] + 32768);
 		}
 
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
 
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
@@ -1696,21 +1742,30 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 
 	THEN("changes are observable on disk") {
 
-		unsigned short fresh_trace[75];
+		std::vector<unsigned short> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == src_trace[0] + 32768);
-		CHECK(fresh_trace[10] == src_trace[10] + 32768);
-		CHECK(fresh_trace[20] == src_trace[20] + 32768);
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+		for (int i = 0; i < 75; i++) {
+			CHECK(fresh_trace[i] == (unsigned short)(src_trace[i] + 32768));
+		}
 	}
 
 
@@ -1727,7 +1782,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector<std::int16_t> src_trace(75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -1741,10 +1796,12 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 
 	Err err = Err::ok();
 
-
-	unique_segy dst_ufp{ openfile("test-data/SEGY_SIGNED_INTEGER_4_BYTE.sgy", "w+b") };
+	char * outp = "test-data/SEGY_SIGNED_INTEGER_4_BYTE.sgy";
+	if( testcfg::config().lsbit )
+		outp = "test-data/SEGY_SIGNED_INTEGER_4_BYTE-lsb.sgy";
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
 	auto dst_fp = dst_ufp.get();
-	int dst_trace[75];
+	std::vector< std::int32_t > dst_trace(75);
 
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
@@ -1763,7 +1820,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -1782,15 +1839,23 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
 		REQUIRE(err == Err::ok());
 
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
 		for (int i = 0; i < samples; i++) {
-			dst_trace[i] = (int)src_trace[i];
+			dst_trace[i] = src_trace[i];
 		}
 
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
 
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
@@ -1807,21 +1872,29 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 
 	THEN("changes are observable on disk") {
 
-		int fresh_trace[75];
+		std::vector<int> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == (int)src_trace[0]);
-		CHECK(fresh_trace[10] == (int)src_trace[10]);
-		CHECK(fresh_trace[20] == (int)src_trace[20]);
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+		for (int i = 0; i < 75; i++) {
+			CHECK(fresh_trace[i] == (int)src_trace[i]);
+		}
 	}
 
 
@@ -1836,10 +1909,13 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 	unique_segy src_ufp{ openfile("test-data/f3.sgy", "rb") };
 	auto src_fp = src_ufp.get();
 
+	int int_max = std::numeric_limits<int>::max();
+
+
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector < std::int16_t> src_trace (75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -1854,9 +1930,12 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 	Err err = Err::ok();
 
 
-	unique_segy dst_ufp{ openfile("test-data/SEGY_UNSIGNED_INTEGER_4_BYTE.sgy", "w+b") };
+	char * outp = "test-data/SEGY_UNSIGNED_INTEGER_4_BYTE.sgy";
+	if (testcfg::config().lsbit)
+		outp = "test-data/SEGY_UNSIGNED_INTEGER_4_BYTE-lsb.sgy";
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
 	auto dst_fp = dst_ufp.get();
-	unsigned int dst_trace[75];
+	std::vector<std::uint32_t>dst_trace (75);
 
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
@@ -1875,7 +1954,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -1894,15 +1973,23 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
 		REQUIRE(err == Err::ok());
 
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+		
 		for (int i = 0; i < samples; i++) {
-			dst_trace[i] = (unsigned int)src_trace[i];
+			dst_trace[i] = (unsigned int) (src_trace[i] + int_max);
 		}
 
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
 
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
@@ -1919,21 +2006,29 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 
 	THEN("changes are observable on disk") {
 
-		unsigned int fresh_trace[75];
+		std::vector<unsigned int> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == (unsigned int)src_trace[0]);
-		CHECK(fresh_trace[10] == (unsigned int)src_trace[10]);
-		CHECK(fresh_trace[20] == (unsigned int)src_trace[20]);
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+		for (int i = 0; i < 75; i++) {
+			CHECK(fresh_trace[i] == (unsigned int)(src_trace[i] + int_max));
+		}
 	}
 
 
@@ -1951,7 +2046,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector<std::int16_t> src_trace(75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -1966,9 +2061,13 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 	Err err = Err::ok();
 
 
-	unique_segy dst_ufp{ openfile("test-data/SEGY_SIGNED_CHAR_1_BYTE.sgy", "w+b") };
+	char * outp = "test-data/SEGY_SIGNED_CHAR_1_BYTE.sgy";
+	if (testcfg::config().lsbit)
+		outp = "test-data/SEGY_SIGNED_CHAR_1_BYTE-lsb.sgy";
+
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
 	auto dst_fp = dst_ufp.get();
-	char dst_trace[75];
+	std::vector<char> dst_trace(75);
 
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
@@ -1987,7 +2086,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -2006,22 +2105,27 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
 		REQUIRE(err == Err::ok());
 
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
 		for (int i = 0; i < samples; i++) {
-			dst_trace[i] =  (char)(src_trace[i]/256.0f); //scale it down from +-32768 to +-128
+			dst_trace[i] = (char ) (src_trace[i]/256.0f);
 		}
 
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
 
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
 	}
-
-
-
 
 
 
@@ -2031,21 +2135,32 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 
 	THEN("changes are observable on disk") {
 
-		char fresh_trace[75];
+		std::vector<char> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == (char) (src_trace[0]/256.0));
-		CHECK(fresh_trace[10] == (char) (src_trace[10] / 256.0));
-		CHECK(fresh_trace[20] == (char) (src_trace[20] / 256.0));
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+		//char char_max = std::numeric_limits<char>::max();
+		//char char_min = std::numeric_limits<char>::min();
+
+		for (int i = 0; i < 75; i++) {
+			CHECK(fresh_trace[i] == (char)(src_trace[i] / 256.0));
+		}
 	}
 
 
@@ -2063,7 +2178,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 	char src_header[SEGY_BINARY_HEADER_SIZE];
 	int src_format;
 	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
-	short src_trace[75];
+	std::vector<std::int16_t> src_trace(75);
 
 	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
 
@@ -2078,9 +2193,13 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 	Err err = Err::ok();
 
 
-	unique_segy dst_ufp{ openfile("test-data/SEGY_UNSIGNED_CHAR_1_BYTE.sgy", "w+b") };
+	char * outp = "test-data/SEGY_UNSIGNED_CHAR_1_BYTE.sgy";
+	if (testcfg::config().lsbit)
+		outp = "test-data/SEGY_UNSIGNED_CHAR_1_BYTE-lsb.sgy";
+
+	unique_segy dst_ufp{ openfile(outp, "w+b") };
 	auto dst_fp = dst_ufp.get();
-	unsigned char dst_trace[75];
+	std::vector<unsigned char> dst_trace(75);
 
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
@@ -2099,7 +2218,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 	segy_set_format(dst_fp, dst_format);
 	//dst_fp.lsb = 1;	
 
-	//segy_write_binheader( dst_fp, dst_header );
+	segy_write_binheader( dst_fp, dst_header );
 
 
 	int dst_trace_bsize = segy_trsize(dst_format, samples);
@@ -2118,15 +2237,22 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 		REQUIRE(err == Err::ok());
 
 
-		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		err = segy_readtrace(src_fp, j, src_trace.data(), src_trace0, src_trace_bsize);
 		REQUIRE(err == Err::ok());
 
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
 		for (int i = 0; i < samples; i++) {
-			dst_trace[i] = (unsigned char) (src_trace[i]/256.0 + 128);
+			dst_trace[i] = (unsigned char)(src_trace[i] / 256.0 + 128);
 		}
 
-
-		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+		err = segy_from_native(dst_format, dst_trace.size(), dst_trace.data());
+		REQUIRE(err == Err::ok());
+		
+		err = segy_writetrace(dst_fp, j, dst_trace.data(), dst_trace0, dst_trace_bsize);
 		REQUIRE(err == Err::ok());
 
 
@@ -2143,21 +2269,29 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 
 	THEN("changes are observable on disk") {
 
-		unsigned char fresh_trace[75];
+		std::vector<unsigned char> fresh_trace(75);
 		char fresh[SEGY_TRACE_HEADER_SIZE] = {};
 
 		err = segy_traceheader(dst_fp, 0, fresh, dst_trace0, dst_trace_bsize);
 		CHECK(err == Err::ok());
 
-		err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
-		REQUIRE(err == Err::ok());
-
-		err = segy_readtrace(dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize);
+		err = segy_readtrace(src_fp, 0, src_trace.data(), src_trace0, src_trace_bsize);
 		CHECK(err == Err::ok());
 
-		CHECK(fresh_trace[0] == (unsigned char) (src_trace[0] / 256.0 + 128));
-		CHECK(fresh_trace[10] == (unsigned char) (src_trace[10] / 256.0 + 128));
-		CHECK(fresh_trace[20] == (unsigned char) (src_trace[20] / 256.0 + 128));
+		err = segy_to_native(src_format, src_trace.size(), src_trace.data());
+		REQUIRE(err == Err::ok());
+
+
+
+		err = segy_readtrace(dst_fp, 0, fresh_trace.data(), dst_trace0, dst_trace_bsize);
+		CHECK(err == Err::ok());
+
+		err = segy_to_native(dst_format, fresh_trace.size(), fresh_trace.data());
+		REQUIRE(err == Err::ok());
+
+		for (int i = 0; i < 75; i++) {
+			CHECK(fresh_trace[i] == (unsigned char)(src_trace[i] / 256.0 + 128));
+		}
 	}
 
 
@@ -2212,7 +2346,7 @@ SCENARIO( "reading a 2-byte int file", "[c.segy][2-byte]" ) {
 
         CHECK( err == Err::ok() );
 
-        err = segy_to_native( format, sizeof( val ), &val );
+        err = segy_to_native( format, 1, &val );
         CHECK( err == Err::ok() );
 
         THEN( "the value is incorrect" ) {

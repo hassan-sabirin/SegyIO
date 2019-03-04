@@ -1869,7 +1869,7 @@ int segy_readsubtr( segy_file* fp,
         memcpy( dst, cur, elemsize );
 
     if( fp->lsb){
-			if(fp->elemsize == 8 ) bswap64vec( buf, slicelen );
+			if( fp->elemsize == 8 ) bswap64vec( buf, slicelen );
 			if( fp->elemsize == 4 ) bswap32vec( buf, slicelen );
 			if( fp->elemsize == 2 ) bswap16vec( buf, slicelen );
 	}
