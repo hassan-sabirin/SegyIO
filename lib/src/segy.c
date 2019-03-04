@@ -878,7 +878,7 @@ static inline void detect_endianness( segy_file* fp, void* buf ){
 	
 	//printf("format: %08jx\n", (uintmax_t)format_id);
 	//printf("format: %d\n", format_id);
-	printf("isLSB: %d\n", fp->lsb);
+	//printf("isLSB: %d\n", fp->lsb);
 	}
 int segy_binheader( segy_file* fp, char* buf ) {
     if( !fp ) return SEGY_INVALID_ARGS;
@@ -1234,14 +1234,14 @@ int segy_traces( segy_file* fp,
         if( err != 0 ) return err;
     }
 	
-	printf("FileSize: %d\n", size);
+	//printf("FileSize: %d\n", size);
 
     if( trace0 > size ) return SEGY_INVALID_ARGS;
 
     size -= trace0;
 	
 	
-	printf("FileSize-trace0: %d\n", size);
+	//printf("FileSize-trace0: %d\n", size);
     trace_bsize += SEGY_TRACE_HEADER_SIZE;
 
     if( size % trace_bsize != 0 )
@@ -2076,7 +2076,7 @@ static int segy_native_byteswap( int format,
                                  long long size,
                                  void* buf ) {
 
-	printf("nativebyteswap\n");
+	//printf("nativebyteswap\n");
 	if( HOST_LSB ){
 		
 		const int elemsize = formatsize( format );

@@ -339,8 +339,8 @@ TEST_CASE_METHOD( smallfix,
 TEST_CASE_METHOD( smallfix,
                   "sample format fails on invalid format",
                   "[c.segy]" ) {
-    Err err = segy_set_format( fp, 10 );
-    CHECK( err == Err::args() );
+    Err err = segy_set_format( fp, 20 );
+	CHECK(err == Err::args());
 }
 
 TEST_CASE_METHOD( smallbasic,
@@ -1348,10 +1348,13 @@ SCENARIO( "reading text header", "[c.segy]" ) {
         unique_segy ufp{ openfile( file, "rb" ) };
         auto fp = ufp.get();
 
-        char ascii[ SEGY_TEXT_HEADER_SIZE + 1 ] = {};
-        const Err err = segy_read_textheader( fp, ascii );
-
-        CHECK( err == Err::ok() );
+		char original[SEGY_TEXT_HEADER_SIZE + 1] = {};
+		char ascii[SEGY_TEXT_HEADER_SIZE + 1] = {};
+        const Err err = segy_read_textheader( fp, original);
+		CHECK(err == Err::ok());
+		ebcdic2ascii(original, ascii); 
+		//ascii[SEGY_TEXT_HEADER_SIZE] = '\0';
+        
         CHECK( ascii == expected );
 }
 
@@ -1378,6 +1381,118 @@ SCENARIO( "reading a large file", "[c.segy]" ) {
             }
         }
     }
+}
+
+
+SCENARIO( "Read 2-byte int file, write into 8-byte LSB IEEE float file", "[c.segy][2-byte to 8-byte IEEE float]" ) {
+    unique_segy src_ufp{ openfile( "test-data/f3.sgy", "rb" ) };
+	auto src_fp = src_ufp.get();
+
+	char src_header[ SEGY_BINARY_HEADER_SIZE ];
+	int src_format;
+	char src_tr_header[SEGY_TRACE_HEADER_SIZE];
+	short src_trace[75];
+
+	REQUIRE(Err(segy_binheader(src_fp, src_header)) == Err::ok());
+	
+
+	long src_trace0 = segy_trace0(src_header);
+	int samples = segy_samples(src_header);
+	src_format = segy_format(src_header);
+
+	int src_trace_bsize = segy_trsize(src_format, samples);
+
+	
+	Err err = Err::ok();
+	
+
+	unique_segy dst_ufp{ openfile("test-data/Format6lsb.sgy", "w+b") };
+	auto dst_fp = dst_ufp.get();
+	double dst_trace[75];
+
+
+	char dst_header[ SEGY_BINARY_HEADER_SIZE ];	
+	int dst_format = SEGY_IEEE_FLOAT_8_BYTE;	
+	char dst_tr_header[ SEGY_TRACE_HEADER_SIZE ];
+	
+	
+	
+	
+	memcpy( dst_header,src_header, sizeof(char) * SEGY_BINARY_HEADER_SIZE );
+
+	long dst_trace0 = segy_trace0(dst_header);
+
+	segy_set_bfield(dst_header, SEGY_BIN_TRACES, 5);
+	segy_set_bfield(dst_header, SEGY_BIN_FORMAT, SEGY_IEEE_FLOAT_8_BYTE);
+	segy_set_format(dst_fp, SEGY_IEEE_FLOAT_8_BYTE);	
+	//dst_fp.lsb = 1;	
+	
+	//segy_write_binheader( dst_fp, dst_header );
+	
+	
+	int dst_trace_bsize = segy_trsize( dst_format, samples );
+	
+	for (int j = 0; j < 2; j++) {
+
+		REQUIRE(Err(segy_traceheader(src_fp,
+			j,
+			src_tr_header,
+			src_trace0,
+			src_trace_bsize)) == Err::ok());
+
+		memcpy(dst_tr_header, src_tr_header, sizeof(char) * SEGY_TRACE_HEADER_SIZE);
+
+		err = segy_write_traceheader(dst_fp, j, dst_tr_header, dst_trace0, dst_trace_bsize);
+		REQUIRE(err == Err::ok());
+
+
+		err = segy_readtrace(src_fp, j, src_trace, src_trace0, src_trace_bsize);
+		REQUIRE(err == Err::ok());
+
+		for (int i = 0; i < samples; i++) {
+			dst_trace[i] = src_trace[i];
+		}
+
+
+		err = segy_writetrace(dst_fp, j, dst_trace, dst_trace0, dst_trace_bsize);
+		REQUIRE(err == Err::ok());
+
+
+	}
+	
+	
+	
+
+
+
+
+	/* memory map only after writing last trace, so size is correct */
+	testcfg::config().mmap( dst_fp );
+
+        THEN( "changes are observable on disk" ) {
+			
+			double fresh_trace[ 75 ];
+            char fresh[ SEGY_TRACE_HEADER_SIZE ] = {};
+           
+            err = segy_traceheader( dst_fp, 0, fresh, dst_trace0, dst_trace_bsize );
+            CHECK( err == Err::ok() );
+			
+			err = segy_readtrace(src_fp, 0, src_trace, src_trace0, src_trace_bsize);
+			REQUIRE(err == Err::ok());
+
+            err = segy_readtrace( dst_fp, 0, fresh_trace, dst_trace0, dst_trace_bsize );
+            CHECK( err == Err::ok() );
+
+            CHECK( fresh_trace[0] == (double) src_trace[0] );
+            CHECK( fresh_trace[10] == (double) src_trace[10] );
+            CHECK( fresh_trace[20] == (double) src_trace[20] );
+        }
+		
+		
+//    segy_to_native( self->format, bufsize, buffer.buf() );
+	
+	
+	
 }
 
 SCENARIO( "reading a 2-byte int file", "[c.segy][2-byte]" ) {
