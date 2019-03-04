@@ -1398,6 +1398,7 @@ SCENARIO("Read 2-byte int file, write into 8-byte IEEE double file", "[c.segy][2
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -1415,6 +1416,8 @@ SCENARIO("Read 2-byte int file, write into 8-byte IEEE double file", "[c.segy][2
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_IEEE_DOUBLE_8_BYTE;
+
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
@@ -1528,6 +1531,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -1546,6 +1550,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte signed short file", "[c.segy][
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_SIGNED_SHORT_2_BYTE;
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
@@ -1658,6 +1663,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -1676,6 +1682,7 @@ SCENARIO("Read 2-byte int file, write into 2-byte unsigned short file", "[c.segy
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_UNSIGNED_SHORT_2_BYTE;
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
@@ -1790,6 +1797,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -1806,6 +1814,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte signed int file", "[c.segy][2-
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_SIGNED_INTEGER_4_BYTE;
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
@@ -1923,6 +1932,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -1940,6 +1950,7 @@ SCENARIO("Read 2-byte int file, write into 4-byte unsigned int file", "[c.segy][
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_UNSIGNED_INTEGER_4_BYTE;
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
@@ -2054,6 +2065,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -2072,6 +2084,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte signed char file", "[c.segy][2
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_SIGNED_CHAR_1_BYTE;
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
@@ -2186,6 +2199,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 	long src_trace0 = segy_trace0(src_header);
 	int samples = segy_samples(src_header);
 	src_format = segy_format(src_header);
+	segy_set_format(src_fp, src_format);
 
 	int src_trace_bsize = segy_trsize(src_format, samples);
 
@@ -2204,6 +2218,7 @@ SCENARIO("Read 2-byte int file, write into 1-byte unsigned char file", "[c.segy]
 
 	char dst_header[SEGY_BINARY_HEADER_SIZE];
 	int dst_format = SEGY_UNSIGNED_CHAR_1_BYTE;
+	segy_set_format(dst_fp, dst_format);
 	char dst_tr_header[SEGY_TRACE_HEADER_SIZE];
 
 
