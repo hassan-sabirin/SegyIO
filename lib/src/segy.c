@@ -413,7 +413,7 @@ static int formatsize( int format ) {
         case SEGY_SIGNED_SHORT_2_BYTE:          return 2;
         case SEGY_FIXED_POINT_WITH_GAIN_4_BYTE: return 4;
         case SEGY_IEEE_FLOAT_4_BYTE:            return 4;
-		case SEGY_IEEE_FLOAT_8_BYTE:			return 8;
+		case SEGY_IEEE_DOUBLE_8_BYTE:			return 8;
         case SEGY_SIGNED_CHAR_1_BYTE:           return 1;
 		case SEGY_UNSIGNED_CHAR_1_BYTE:			return 1;
 		case SEGY_UNSIGNED_INTEGER_4_BYTE:		return 4;
@@ -861,7 +861,7 @@ static inline void detect_endianness( segy_file* fp, void* buf ){
 	
 	//printf("buf: %08jx\n", *(uintmax_t *)buf);
     //segy_get_bfield( buf, SEGY_BIN_FORMAT, &format_id );
-	format_id = segy_format( buf, &format_id );
+	format_id = segy_format( buf );
 	
 	// the data format is stored in two bytes.
 	// current valid range is between 1 to 16 (lookup segy.h SEGY_FORMAT)
