@@ -1348,11 +1348,14 @@ SCENARIO( "reading text header", "[c.segy]" ) {
         unique_segy ufp{ openfile( file, "rb" ) };
         auto fp = ufp.get();
 
-        char ascii[ SEGY_TEXT_HEADER_SIZE + 1 ] = {};
-        const Err err = segy_read_textheader( fp, ascii );
-
-        CHECK( err == Err::ok() );
-        CHECK( ascii == expected );
+        char original[SEGY_TEXT_HEADER_SIZE + 1] = {};
+        char ascii[SEGY_TEXT_HEADER_SIZE + 1] = {};
+        
+        const Err err = segy_read_textheader( fp, original);
+        ebcdic2ascii(original, ascii);
+        
+        CHECK(err == Err::ok());
+        CHECK(ascii == expected);
 }
 
 SCENARIO( "reading a large file", "[c.segy]" ) {
